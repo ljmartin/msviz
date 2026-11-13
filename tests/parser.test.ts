@@ -317,3 +317,24 @@ describe('the example session from the design doc', () => {
         expect(cmds.map(c => c.kind)).toEqual(['load', 'load', 'align', 'select', 'show', 'hide', 'color']);
     });
 });
+
+describe('link', () => {
+    it('parses link and share', () => {
+        expect(parseCommand('link; share')).toEqual([{ kind: 'link' }, { kind: 'link' }]);
+        expect(() => parseCommand('link foo')).toThrow();
+    });
+});
+
+describe('camera and colour reset', () => {
+    it('parses camera', () => {
+        expect(parseCommand('camera')).toEqual([{ kind: 'camera' }]);
+        expect(parseCommand('camera 1,2,3 4,5,6 0,1,0 30.5')).toEqual(
+            [{ kind: 'camera', view: [1, 2, 3, 4, 5, 6, 0, 1, 0, 30.5] }]);
+        expect(() => parseCommand('camera 1,2,3')).toThrow(ParseError);
+    });
+    it('parses color byhet and color default in both orders', () => {
+        expect(parseCommand('color byhet')).toEqual([{ kind: 'uncolor', scope: 'het' }]);
+        expect(parseCommand('color byhet :EJE')).toEqual(parseCommand('color :EJE byhet'));
+        expect(parseCommand('color default :EJE')[0]).toMatchObject({ kind: 'uncolor', scope: 'all' });
+    });
+});

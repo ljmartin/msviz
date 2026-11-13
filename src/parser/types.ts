@@ -57,6 +57,19 @@ export type Command =
     | { kind: 'close'; model?: string }
     /** Continuous camera motion; 'off' stops it. */
     | { kind: 'animate'; mode: 'rock' | 'spin' | 'off' }
+    /**
+     * Remove colours set by `color`, so atoms return to their default colouring
+     * (heteroatoms by element; carbons, cartoons and surfaces in the model colour).
+     * 'het' leaves carbon atoms as they are.
+     */
+    | { kind: 'uncolor'; scope: 'het' | 'all'; selection?: SelExpr }
+    /**
+     * Camera placement in scene coordinates: position, target, up (three
+     * numbers each) and clipping radius. `view` undefined reports the current one.
+     */
+    | { kind: 'camera'; view?: number[] }
+    /** Report the commands that reproduce the current scene. */
+    | { kind: 'link' }
     | { kind: 'help' };
 
 export class ParseError extends Error {

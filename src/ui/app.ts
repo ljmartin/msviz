@@ -2,7 +2,7 @@
  * Browser entry point: wires the command box to parseCommand and the plugin bridge.
  */
 
-import { ModelEntry } from '../executor/session';
+import { CommandResult, ModelEntry } from '../executor/session';
 import { PluginBridge } from '../plugin/plugin-bridge';
 import { createPlugin } from '../plugin/viewer-init';
 
@@ -31,6 +31,27 @@ function renderModels(models: readonly ModelEntry[]) {
         li.appendChild(swatch);
         return li;
     }));
+}
+
+/** A URL of this page that replays `script` on load. */
+function shareUrl(script: string): string {
+    // Keep the characters that are safe in a query string readable; # & + < > stay encoded.
+    const query = encodeURIComponent(script)
+        .replace(/%20/g, '+').replace(/%3A/g, ':').replace(/%2F/g, '/')
+        .replace(/%3B/g, ';').replace(/%2C/g, ',').replace(/%40/g, '@');
+    return `${location.origin}${location.pathname}?cmd=${query}`;
+}
+
+async function report(result: CommandResult) {
+    if (result.command.kind !== 'link' || !result.script) return print(result.message, 'out');
+    const url = shareUrl(result.script);
+    print(url, 'out');
+    try {
+        await navigator.clipboard.writeText(url);
+        print('copied to clipboard', 'info');
+    } catch {
+        // Clipboard access can be refused; the URL is in the log either way.
+    }
 }
 
 function fitInput() {
@@ -68,7 +89,7 @@ async function main() {
         queue = queue.then(async () => {
             print(text, 'cmd');
             try {
-                await bridge.run(text, r => print(r.message, 'out'));
+                await bridge.run(text, r => void report(r));
             } catch (e) {
                 print(e instanceof Error ? e.message : String(e), 'err');
             } finally {

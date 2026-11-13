@@ -213,3 +213,36 @@ describe('models', () => {
         expect(s.models).toHaveLength(0);
     });
 });
+
+describe('link', () => {
+    it('reports the successful commands and resets when everything is closed', async () => {
+        const session = createTestSession();
+        await session.run('load 1CRN; show sticks :PRO');
+        await expect(session.run('show sticks :PRO :> 5')).rejects.toThrow();
+        await session.run('help; color gold :PRO & C');
+        const [first] = await session.run('link');
+        expect(first.script).toBe('load 1CRN; show sticks :PRO; color gold :PRO & C');
+
+        const replay = createTestSession();
+        await replay.run(first.script!);
+        expect((await replay.run('link'))[0].script).toBe(first.script);
+
+        await session.run('close; load 1CRN');
+        expect((await session.run('link'))[0].script).toBe('load 1CRN');
+    });
+});
+
+describe('colour reset', () => {
+    it('byhet clears colour from non-carbon atoms only; default clears the rest', async () => {
+        const session = createTestSession();
+        await session.run('load 4HHB; color salmon /A:HEM');
+        const model = session.models[0];
+        const painted = () => model.colors.reduce((n, l) => n + Session.count(new Map([[model, l.loci]])), 0);
+        expect(painted()).toBe(43);
+        const [r] = await session.run('color byhet /A:HEM :< 5');
+        expect(painted()).toBe(34);
+        expect(r.atomCount).toBeGreaterThan(9);
+        await session.run('color default /A');
+        expect(model.colors).toHaveLength(0);
+    });
+});

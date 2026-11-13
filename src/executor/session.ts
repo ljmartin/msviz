@@ -14,7 +14,7 @@
 import { Mat4 } from 'molstar/lib/mol-math/linear-algebra';
 import { Structure, StructureElement } from 'molstar/lib/mol-model/structure';
 import { colorToNumber } from '../parser/colors';
-import { HELP_TEXT, parseCommand } from '../parser/command-parser';
+import { HELP_TEXT, parseCommand, sourceOf } from '../parser/command-parser';
 import { Command, REPRESENTATIONS, Representation, SelExpr } from '../parser/types';
 import {
     AlignmentSummary, alignStructures, allLoci, atomsWithin, chainIds, emptyLoci, fetchSiftsStructure, lociPositions,
@@ -64,6 +64,10 @@ export interface CommandResult {
     alignment?: AlignmentSummary & { mobile: ModelEntry; reference: ModelEntry };
     /** Camera target requested by `focus` or a first `load`; 'all' means everything. */
     focus?: Map<ModelEntry, Loci> | 'all';
+    /** For `link`: the commands that reproduce the current scene, joined with "; ". */
+    script?: string;
+    /** For `camera` with arguments: the view to restore. */
+    camera?: number[];
 }
 
 const MODEL_COLORS = [0x8fb3d9, 0xe0a66b, 0x8fc49a, 0xd98f9f, 0xb39ad6, 0xd6cf7a, 0x7fc8c8, 0xc79a7f];
@@ -80,6 +84,8 @@ export class Session {
     selection: Map<ModelEntry, Loci> | undefined;
     /** Continuous camera motion. Off until a rock or spin command asks for it. */
     animation: 'rock' | 'spin' | 'off' = 'off';
+    /** Statements that have succeeded since the scene was last empty, in order. */
+    private readonly script: string[] = [];
     private readonly siftsStructures = new Map<ModelEntry, Promise<Structure>>();
 
     /**
@@ -100,6 +106,14 @@ export class Session {
     }
 
     async execute(command: Command): Promise<CommandResult> {
+        const result = await this.dispatch(command);
+        const source = sourceOf(command);
+        if (command.kind === 'close' && this.models.length === 0) this.script.length = 0;
+        else if (source !== undefined && changesScene(command)) this.script.push(source);
+        return result;
+    }
+
+    private async dispatch(command: Command): Promise<CommandResult> {
         switch (command.kind) {
             case 'load': return this.load(command);
             case 'select': return this.select(command);
@@ -113,6 +127,15 @@ export class Session {
             case 'animate':
                 this.animation = command.mode;
                 return { command, message: command.mode === 'off' ? 'camera motion stopped' : `${command.mode} on ("stop" to end)` };
+            case 'uncolor': return this.uncolor(command);
+            case 'camera':
+                return command.view
+                    ? { command, message: 'camera set', camera: command.view }
+                    : { command, message: 'no viewer to read the camera from' };
+            case 'link': {
+                const script = this.script.join('; ');
+                return { command, message: script || 'nothing to link to yet', script };
+            }
             case 'help': return { command, message: HELP_TEXT };
         }
     }
@@ -296,6 +319,24 @@ export class Session {
         return { command, atomCount, message: `color ${command.color}: ${atomCount} atoms${scope}${describeModels(resolved)}` };
     }
 
+    private uncolor(command: Extract<Command, { kind: 'uncolor' }>): CommandResult {
+        const { resolved, scope } = this.target(command.selection);
+        const nonCarbon = command.scope === 'het'
+            ? this.resolve({ type: 'not', expr: { type: 'spec', elements: ['C'] } }) : undefined;
+        let atomCount = 0;
+        resolved.forEach((loci, m) => {
+            const target = nonCarbon ? intersect(loci, nonCarbon.get(m)!) : loci;
+            const n = lociSize(target);
+            if (!n) return;
+            atomCount += n;
+            m.colors = m.colors
+                .map(layer => ({ loci: subtract(layer.loci, target), color: layer.color }))
+                .filter(layer => lociSize(layer.loci) > 0);
+        });
+        const what = command.scope === 'het' ? 'non-carbon atoms' : 'atoms';
+        return { command, atomCount, message: `default colours restored: ${atomCount} ${what}${scope}` };
+    }
+
     private transparency(command: Extract<Command, { kind: 'transparency' }>): CommandResult {
         const { resolved, scope } = this.target(command.selection);
         const value = command.percent / 100;
@@ -385,6 +426,11 @@ function matchChainId(model: ModelEntry, id: string): string {
     if (model.chainIds.includes(id)) return id;
     const lower = id.toLowerCase();
     return model.chainIds.find(c => c.toLowerCase() === lower) ?? id;
+}
+
+/** False for commands that only report something. */
+function changesScene(command: Command): boolean {
+    return command.kind !== 'help' && command.kind !== 'link' && !(command.kind === 'camera' && !command.view);
 }
 
 function describeModels(resolved: Map<ModelEntry, Loci>): string {

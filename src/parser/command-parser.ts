@@ -31,11 +31,24 @@ const KEYWORD_ALIASES: Readonly<Record<string, Command['kind']>> = {
     focus: 'focus', view: 'focus', zoom: 'focus',
     close: 'close', delete: 'close',
     rock: 'animate', spin: 'animate', stop: 'animate',
+    camera: 'camera',
+    link: 'link', share: 'link',
     help: 'help', '?': 'help',
 };
 
+const SOURCES = new WeakMap<Command, string>();
+
+/** The statement text a command was parsed from; undefined for hand-built commands. */
+export function sourceOf(command: Command): string | undefined {
+    return SOURCES.get(command);
+}
+
 export function parseCommand(text: string): Command[] {
-    return splitStatements(text).map(parseStatement);
+    return splitStatements(text).map(statement => {
+        const command = parseStatement(statement);
+        SOURCES.set(command, statement);
+        return command;
+    });
 }
 
 export function parseStatement(statement: string): Command {
@@ -52,6 +65,10 @@ export function parseStatement(statement: string): Command {
         case 'focus': return rest ? { kind: 'focus', selection: parseSelection(rest) } : { kind: 'focus' };
         case 'close': return parseClose(rest);
         case 'animate': return parseAnimate(keyword, rest);
+        case 'camera': return parseCamera(rest);
+        case 'link':
+            if (rest) throw new ParseError(`usage: ${keyword}`);
+            return { kind: 'link' };
         case 'help': return { kind: 'help' };
         default:
             throw new ParseError(`unknown command "${keyword}" (try "help")`);
@@ -120,13 +137,27 @@ function parseShowHide(kind: 'show' | 'hide', rest: string): Command {
     return { kind, repr: repr ?? 'ball-and-stick', ...sel };
 }
 
+const UNCOLOR: Readonly<Record<string, 'het' | 'all'>> = {
+    byhet: 'het', byhetero: 'het', default: 'all', reset: 'all',
+};
+
 /**
+ * color byhet|default [selection]   remove colours again (also selection first)
  * color <color> [selection]      (design-doc order)
  * color <selection> <color>      (ChimeraX order)
  */
 function parseColor(rest: string): Command {
     const tokens = words(rest);
     if (!tokens.length) throw new ParseError('usage: color <name|#hex> [selection]');
+    const reset = (t: string) => UNCOLOR[t.toLowerCase()];
+    if (reset(tokens[0])) {
+        const scope = reset(tokens.shift()!);
+        return { kind: 'uncolor', scope, ...optionalSelection(tokens) };
+    }
+    if (tokens.length > 1 && reset(tokens[tokens.length - 1])) {
+        const scope = reset(tokens.pop()!);
+        return { kind: 'uncolor', scope, ...optionalSelection(tokens) };
+    }
     let token: string;
     if (isColorToken(tokens[0])) {
         token = tokens.shift()!;
@@ -202,6 +233,16 @@ function parseClose(rest: string): Command {
     return { kind: 'close', model: tokens[0].replace(/^#/, '') };
 }
 
+/** camera [px,py,pz tx,ty,tz ux,uy,uz radius] */
+function parseCamera(rest: string): Command {
+    if (!rest) return { kind: 'camera' };
+    const view = rest.split(/[\s,]+/).filter(Boolean).map(Number);
+    if (view.length !== 10 || view.some(v => !Number.isFinite(v)) || view[9] <= 0) {
+        throw new ParseError('usage: camera [px,py,pz tx,ty,tz ux,uy,uz radius]');
+    }
+    return { kind: 'camera', view };
+}
+
 /** rock [on|off] | spin [on|off] | stop */
 function parseAnimate(keyword: string, rest: string): Command {
     if (keyword === 'stop') {
@@ -220,11 +261,15 @@ export const HELP_TEXT = `Commands (separate with ; or newlines, keywords are ca
   show <repr> [selection]              also: show <selection> <repr>
   hide [repr] [selection]              no repr hides every representation
   color <name|#hex> [selection]        also: color <selection> <color>
+  color byhet [selection]              undo colouring on non-carbon atoms (back to element colours)
+  color default [selection]            undo colouring on every atom
   transparency <0-100> [selection] [repr|all]   surfaces unless a repr is named; 0 is opaque
   align <mobile> to <reference> [method=sequence|tmalign|sifts|superpose]
   focus [selection]                    centre the camera
   close [model]                        remove one model, or all of them
   rock | spin | stop                   camera motion (off by default); also rock off, spin off
+  camera [px,py,pz tx,ty,tz ux,uy,uz r]  print the current view, or restore one
+  link                                 a URL that replays this session, including the current view
 
 Representations
   cartoon  surface  ball-and-stick (sticks, atoms)  spacefill (vdw, spheres)  ribbon

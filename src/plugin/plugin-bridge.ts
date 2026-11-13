@@ -75,6 +75,14 @@ export class PluginBridge {
             const result = await this.session.execute(command);
             await this.sync();
             this.applyFocus(result);
+            if (command.kind === 'camera') {
+                if (result.camera) this.setCamera(result.camera);
+                else result.message = this.cameraStatement() ?? result.message;
+            } else if (command.kind === 'link' && result.script) {
+                // Finish with the current view, so the link opens as it looks now.
+                const camera = this.cameraStatement();
+                if (camera) result.script = result.message = `${result.script}; ${camera}`;
+            }
             return result;
         } catch (e) {
             // Keep the scene consistent with the session even after a failure.
@@ -304,6 +312,23 @@ export class PluginBridge {
             const scene = lociSize(loci) ? this.toScene(model, loci) : undefined;
             if (scene) selects.select({ loci: scene }, false);
         });
+    }
+
+    /** The `camera ...` command that restores the current view. */
+    cameraStatement(): string | undefined {
+        const snapshot = this.plugin.canvas3d?.camera.getSnapshot();
+        if (!snapshot) return undefined;
+        const fmt = (v: ArrayLike<number>, digits: number) =>
+            Array.from(v, x => String(+x.toFixed(digits))).join(',');
+        const { position, target, up, radius } = snapshot;
+        return `camera ${fmt(position, 2)} ${fmt(target, 2)} ${fmt(up, 4)} ${+radius.toFixed(2)}`;
+    }
+
+    private setCamera(view: number[]) {
+        const [px, py, pz, tx, ty, tz, ux, uy, uz, radius] = view;
+        this.plugin.managers.camera.setSnapshot({
+            position: Vec3.create(px, py, pz), target: Vec3.create(tx, ty, tz), up: Vec3.create(ux, uy, uz), radius,
+        }, 0);
     }
 
     private applyFocus(result: CommandResult) {
