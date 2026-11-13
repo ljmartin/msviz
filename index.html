@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MolView</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/src/ui/style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="stage">
+      <div id="viewer"></div>
+      <div id="hover" hidden></div>
+      <ul id="models"></ul>
+    </section>
+    <section id="console">
+      <div id="log" role="log" aria-live="polite"></div>
+      <div id="prompt">
+        <span aria-hidden="true">&gt;</span>
+        <textarea id="cmd-input" rows="1" spellcheck="false" autocomplete="off" autocapitalize="off"
+          aria-label="Command"
+          placeholder="load 4HHB; select chain A residues 10-50; show surface     (help for commands)"></textarea>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/src/ui/app.ts"></script>
+</body>
+</html>

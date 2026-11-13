@@ -1,0 +1,110 @@
+:root {
+  --bg: #14161a;
+  --panel: #1b1e24;
+  --line: #2b3038;
+  --text: #d7dbe2;
+  --dim: #8a919d;
+  --accent: #8fb3d9;
+  --error: #f08a8a;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 var(--mono);
+}
+
+#app {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+}
+
+#stage { position: relative; min-height: 0; }
+
+#viewer { position: absolute; inset: 0; }
+#viewer canvas { display: block; }
+
+#hover {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  max-width: calc(100% - 24px);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(20, 22, 26, 0.85);
+  color: var(--text);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#models {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: right;
+  pointer-events: none;
+}
+#models li { padding: 1px 0; color: var(--dim); }
+#models .swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-left: 6px;
+  border-radius: 2px;
+  vertical-align: baseline;
+}
+
+#console {
+  display: grid;
+  grid-template-rows: auto auto;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+#log {
+  height: 22vh;
+  min-height: 90px;
+  overflow-y: auto;
+  padding: 8px 12px 4px;
+}
+#log div { white-space: pre-wrap; overflow-wrap: anywhere; }
+#log .cmd { color: var(--accent); }
+#log .cmd::before { content: "> "; color: var(--dim); }
+#log .out { color: var(--text); }
+#log .info { color: var(--dim); }
+#log .err { color: var(--error); }
+
+#prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--line);
+}
+#prompt span { color: var(--dim); padding-top: 1px; }
+
+#cmd-input {
+  flex: 1;
+  min-width: 0;
+  max-height: 30vh;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+#cmd-input::placeholder { color: var(--dim); opacity: 0.7; }
+#cmd-input:disabled { opacity: 0.5; }
